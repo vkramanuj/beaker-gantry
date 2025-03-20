@@ -95,12 +95,7 @@ def parse_git_remote_url(url: str) -> Tuple[str, str]:
     :raises InvalidRemoteError: If the URL can't be parsed correctly.
     """
     try:
-        account, repo = (
-            url.split("https://github.com/")[-1]
-            .split("git@github.com:")[-1]
-            .split(".git")[0]
-            .split("/")
-        )
+        account, repo = url.split("https://github.com/")[-1].split("git@github.com:")[-1].split(".git")[0].split("/")
     except ValueError:
         raise InvalidRemoteError(f"Failed to parse GitHub repo path from remote '{url}'")
     return account, repo
@@ -143,9 +138,7 @@ def get_latest_experiment(
         return None
 
 
-def follow_experiment(
-    beaker: Beaker, experiment: Experiment, timeout: int = 0, tail: bool = False
-) -> Job:
+def follow_experiment(beaker: Beaker, experiment: Experiment, timeout: int = 0, tail: bool = False) -> Job:
     console = rich.get_console()
 
     # Wait for job to start...
@@ -202,9 +195,7 @@ def display_logs(beaker: Beaker, job: Job) -> Job:
 def display_results(beaker: Beaker, experiment: Experiment, job: Job):
     exit_code = job.status.exit_code
     if exit_code is None:
-        raise ExperimentFailedError(
-            f"Experiment failed, see {beaker.experiment.url(experiment)} for details"
-        )
+        raise ExperimentFailedError(f"Experiment failed, see {beaker.experiment.url(experiment)} for details")
     elif exit_code > 0:
         raise ExperimentFailedError(
             f"Experiment exited with non-zero code ({exit_code}), see {beaker.experiment.url(experiment)} for details"
@@ -217,7 +208,7 @@ def display_results(beaker: Beaker, experiment: Experiment, job: Job):
         result_dataset = job.result.beaker
 
     print(
-        f"[b green]\N{check mark}[/] [b cyan]{experiment.name}[/] completed successfully\n"
+        f"[b green]\N{CHECK MARK}[/] [b cyan]{experiment.name}[/] completed successfully\n"
         f"[b]Experiment:[/] {beaker.experiment.url(experiment)}\n"
         f"[b]Runtime:[/] {format_timedelta(job.status.exited - job.status.started)}\n"
         f"[b]Results:[/] {None if result_dataset is None else beaker.dataset.url(result_dataset)}"
@@ -255,9 +246,7 @@ def ref_exists_on_remote(git_ref: str) -> bool:
 
     git = Git(".")
 
-    output = cast(
-        str, git.execute(["git", "branch", "-r", "--contains", git_ref], stdout_as_string=True)
-    )
+    output = cast(str, git.execute(["git", "branch", "-r", "--contains", git_ref], stdout_as_string=True))
     output = output.strip()
     return len(output) > 0
 
@@ -290,9 +279,7 @@ def ensure_entrypoint_dataset(beaker: Beaker) -> Dataset:
                 entrypoint_path = tmpdir / constants.ENTRYPOINT
                 with open(entrypoint_path, "wb") as entrypoint_file:
                     entrypoint_file.write(contents)
-                gantry_entrypoint_dataset = beaker.dataset.create(
-                    entrypoint_dataset_name, entrypoint_path
-                )
+                gantry_entrypoint_dataset = beaker.dataset.create(entrypoint_dataset_name, entrypoint_path)
         except DatasetConflict:  # could be in a race with another `gantry` process.
             time.sleep(1.0)
             gantry_entrypoint_dataset = beaker.dataset.get(entrypoint_dataset_name)
@@ -324,7 +311,8 @@ def ensure_entrypoint_dataset(beaker: Beaker) -> Dataset:
 
 
 def ensure_github_token_secret(
-    beaker: Beaker, secret_name: str = constants.GITHUB_TOKEN_SECRET
+    beaker: Beaker,
+    secret_name: str = constants.GITHUB_TOKEN_SECRET,
 ) -> str:
     try:
         beaker.secret.get(secret_name)
@@ -332,7 +320,7 @@ def ensure_github_token_secret(
         raise GitHubTokenSecretNotFound(
             f"GitHub token secret '{secret_name}' not found in Beaker workspace!\n"
             f"You can create a suitable GitHub token by going to https://github.com/settings/tokens/new "
-            f"and generating a token with '\N{ballot box with check} repo' scope.\n"
+            f"and generating a token with '\N{BALLOT BOX WITH CHECK} repo' scope.\n"
             f"Then upload your token as a Beaker secret using the Beaker CLI or Python client."
         )
     return secret_name
@@ -374,9 +362,7 @@ def check_for_upgrades():
     import requests
 
     try:
-        response = requests.get(
-            "https://api.github.com/repos/allenai/beaker-gantry/releases/latest", timeout=1
-        )
+        response = requests.get("https://api.github.com/repos/allenai/beaker-gantry/releases/latest", timeout=1)
         if response.ok:
             latest_version = packaging.version.parse(response.json()["tag_name"])
             if latest_version > packaging.version.parse(VERSION):
@@ -416,9 +402,7 @@ def ensure_workspace(
                 f"[yellow]Your workspace [b]{beaker.workspace.url()}[/] has multiple contributors! "
                 f"Every contributor can view your GitHub personal access token secret ('{gh_token_secret}').[/]"
             )
-            if not yes and not prompt.Confirm.ask(
-                "[yellow][i]Are you sure you want to use this workspace?[/][/]"
-            ):
+            if not yes and not prompt.Confirm.ask("[yellow][i]Are you sure you want to use this workspace?[/][/]"):
                 raise KeyboardInterrupt
         elif workspace is None:
             default_workspace = beaker.workspace.get()
@@ -427,9 +411,7 @@ def ensure_workspace(
             ):
                 raise KeyboardInterrupt
     except WorkspaceNotSet:
-        raise ConfigurationError(
-            "'--workspace' option is required since you don't have a default workspace set"
-        )
+        raise ConfigurationError("'--workspace' option is required since you don't have a default workspace set")
     return beaker
 
 

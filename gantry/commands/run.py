@@ -56,6 +56,12 @@ from .main import CLICK_COMMAND_DEFAULTS, main
     If not specified, your default workspace will be used.""",
 )
 @click.option(
+    "-ngh",
+    "--no-github",
+    is_flag=True,
+    help="""Dont use github lol""",
+)
+@click.option(
     "-c",
     "--cluster",
     type=str,
@@ -239,12 +245,8 @@ from .main import CLICK_COMMAND_DEFAULTS, main
     When used with '--replicas INT', this allows the replicas to communicate with each
     other using their hostnames.""",
 )
-@click.option(
-    "--propagate-failure", is_flag=True, help="""Stop the experiment if any task fails."""
-)
-@click.option(
-    "--propagate-preemption", is_flag=True, help="""Stop the experiment if any task is preempted."""
-)
+@click.option("--propagate-failure", is_flag=True, help="""Stop the experiment if any task fails.""")
+@click.option("--propagate-preemption", is_flag=True, help="""Stop the experiment if any task is preempted.""")
 @click.option(
     "--synchronized-start-timeout",
     type=str,
@@ -267,14 +269,10 @@ from .main import CLICK_COMMAND_DEFAULTS, main
     help="""A weka bucket to mount in the form of 'bucket-name:/mount/location',
     e.g. --weka=oe-training-default:/data""",
 )
-@click.option(
-    "-b", "--budget", type=str, help="""The budget account to associate with the experiment."""
-)
+@click.option("-b", "--budget", type=str, help="""The budget account to associate with the experiment.""")
 @click.option("--preemptible", is_flag=True, help="""Mark the job as preemptible.""")
 @click.option("--stop-preemptible", is_flag=True, help="""Stop all preemptible on the cluster.""")
-@click.option(
-    "--retries", type=int, help="""Specify the number of automatic retries for the experiment."""
-)
+@click.option("--retries", type=int, help="""Specify the number of automatic retries for the experiment.""")
 def run(
     arg: Tuple[str, ...],
     name: Optional[str] = None,
@@ -308,6 +306,7 @@ def run(
     install: Optional[str] = None,
     no_python: bool = False,
     no_conda: bool = False,
+    no_github: bool = False,
     replicas: Optional[int] = None,
     leader_selection: bool = False,
     host_networking: bool = False,
@@ -328,6 +327,9 @@ def run(
 
     $ gantry run --name 'hello-world' -- python -c 'print("Hello, World!")'
     """
+    if no_github:
+        gh_token_secret = None
+
     if not arg:
         raise ConfigurationError(
             "[ARGS]... are required! For example:\n$ gantry run -- python -c 'print(\"Hello, World!\")'"
@@ -336,9 +338,7 @@ def run(
     if beaker_image is None and docker_image is None:
         beaker_image = constants.DEFAULT_IMAGE
     elif (beaker_image is None) == (docker_image is None):
-        raise ConfigurationError(
-            "Either --beaker-image or --docker-image must be specified, but not both."
-        )
+        raise ConfigurationError("Either --beaker-image or --docker-image must be specified, but not both.")
 
     if budget is None:
         budget = prompt.Prompt.ask(
@@ -350,14 +350,11 @@ def run(
     if not budget:
         raise ConfigurationError("Budget account must be specified!")
 
-    task_resources = TaskResources(
-        cpu_count=cpus, gpu_count=gpus, memory=memory, shared_memory=shared_memory
-    )
+    task_resources = TaskResources(cpu_count=cpus, gpu_count=gpus, memory=memory, shared_memory=shared_memory)
 
     # Get repository account, name, and current ref.
-    github_account, github_repo, git_ref, is_public = util.ensure_repo(
-        allow_dirty=ref is not None or allow_dirty
-    )
+    github_account, github_repo, git_ref, is_public = util.ensure_repo(allow_dirty=ref is not None or allow_dirty)
+
     if ref is not None:
         git_ref = ref
 
@@ -368,9 +365,7 @@ def run(
         )
 
     # Initialize Beaker client and validate workspace.
-    beaker = util.ensure_workspace(
-        workspace=workspace, yes=yes, gh_token_secret=gh_token_secret, public_repo=is_public
-    )
+    beaker = util.ensure_workspace(workspace=workspace, yes=yes, gh_token_secret=gh_token_secret, public_repo=is_public)
 
     if beaker_image is not None and beaker_image != constants.DEFAULT_IMAGE:
         try:
@@ -382,14 +377,14 @@ def run(
     entrypoint_dataset = util.ensure_entrypoint_dataset(beaker)
 
     # Get / set the GitHub token secret.
-    if not is_public:
+    if not is_public and not no_github:
         try:
             beaker.secret.get(gh_token_secret)
         except SecretNotFound:
             print_stderr(
                 f"[yellow]GitHub token secret '{gh_token_secret}' not found in workspace.[/]\n"
                 f"You can create a suitable GitHub token by going to https://github.com/settings/tokens/new "
-                f"and generating a token with the '\N{ballot box with check} repo' scope."
+                f"and generating a token with the '\N{BALLOT BOX WITH CHECK} repo' scope."
             )
             gh_token = prompt.Prompt.ask(
                 "[i]Please paste your GitHub token here[/]",
@@ -405,7 +400,6 @@ def run(
             )
 
         gh_token_secret = util.ensure_github_token_secret(beaker, gh_token_secret)
-
     # Validate the input datasets.
     datasets_to_use = ensure_datasets(beaker, *dataset) if dataset else []
 
@@ -509,8 +503,7 @@ def run(
             Path(save_spec).is_file()
             and not yes
             and not prompt.Confirm.ask(
-                f"[yellow]The file '{save_spec}' already exists. "
-                f"[i]Are you sure you want to overwrite it?[/][/]"
+                f"[yellow]The file '{save_spec}' already exists. [i]Are you sure you want to overwrite it?[/][/]"
             )
         ):
             raise KeyboardInterrupt
@@ -522,9 +515,7 @@ def run(
         if yes:
             name = default_name
         else:
-            name = prompt.Prompt.ask(
-                "[i]What would you like to call this experiment?[/]", default=util.unique_name()
-            )
+            name = prompt.Prompt.ask("[i]What would you like to call this experiment?[/]", default=util.unique_name())
 
     if not name:
         raise ConfigurationError("Experiment name cannot be empty!")
@@ -581,9 +572,7 @@ def run(
         if show_logs:
             job = util.follow_experiment(beaker, experiment, timeout=timeout)
         else:
-            experiment = beaker.experiment.wait_for(
-                experiment, timeout=timeout if timeout > 0 else None
-            )[0]
+            experiment = beaker.experiment.wait_for(experiment, timeout=timeout if timeout > 0 else None)[0]
             job = beaker.experiment.tasks(experiment)[0].latest_job  # type: ignore
             assert job is not None
     except (TermInterrupt, JobTimeoutError) as exc:
@@ -594,9 +583,7 @@ def run(
     except KeyboardInterrupt as exc:
         print_stderr(f"[red][bold]{exc.__class__.__name__}:[/] [i]{exc}[/][/]")
         print(f"See the experiment at {beaker.experiment.url(experiment)}")
-        print_stderr(
-            f"[yellow]To cancel the experiment, run:\n[i]$ gantry stop {experiment.id}[/][/]"
-        )
+        print_stderr(f"[yellow]To cancel the experiment, run:\n[i]$ gantry stop {experiment.id}[/][/]")
         sys.exit(1)
 
     util.display_results(beaker, experiment, job)
